@@ -1,0 +1,2297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiball Mayhem: Infinite Pong</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .hud-font {
+      font-family: 'Orbitron', monospace;
+    }
+    .crt-overlay::after {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      z-index: 20;
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+    .glow-cyan {
+      box-shadow: 0 0 20px rgba(34, 211, 238, 0.4), inset 0 0 10px rgba(34, 211, 238, 0.2);
+    }
+    .glow-pink {
+      box-shadow: 0 0 20px rgba(236, 72, 153, 0.4), inset 0 0 10px rgba(236, 72, 153, 0.2);
+    }
+    .glow-amber {
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+    }
+    /* Custom Scrollbar for Cheat & Lab Panels */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-center items-center overflow-x-hidden p-2 sm:p-4 select-none">
+
+  <!-- TOP HEADER & HUD -->
+  <header class="w-full max-w-4xl flex flex-col items-center mt-3 sm:mt-5 mb-2 sm:mb-3 z-30">
+    <div class="flex items-center justify-between w-full px-2 sm:px-4 mb-2">
+      <!-- P1 HUD Info -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <div class="w-2.5 h-8 sm:w-3 sm:h-10 bg-cyan-400 rounded-sm shadow-[0_0_12px_#22d3ee]"></div>
+        <div>
+          <span class="hud-font text-xs sm:text-sm font-semibold tracking-wider text-cyan-400 block">P1 (CYAN)</span>
+          <div class="flex items-baseline space-x-1.5">
+            <span id="p1-score" class="hud-font text-2xl sm:text-4xl font-extrabold text-white">0</span>
+            <span id="p1-target-label" class="hud-font text-[10px] sm:text-xs text-slate-500 font-bold">/50</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Countdown & Ball Counter -->
+      <div class="flex flex-col items-center">
+        <div class="relative flex items-center justify-center">
+          <svg class="w-12 h-12 sm:w-16 sm:h-16 transform -rotate-90">
+            <circle cx="50%" cy="50%" r="20" stroke="currentColor" stroke-width="4" class="text-slate-800" fill="transparent"/>
+            <circle id="spawn-ring" cx="50%" cy="50%" r="20" stroke="currentColor" stroke-width="4" class="text-amber-400 transition-all duration-75" fill="transparent" stroke-dasharray="125.6" stroke-dashoffset="0"/>
+          </svg>
+          <div class="absolute flex flex-col items-center justify-center">
+            <span id="spawn-timer" class="hud-font text-xs sm:text-sm font-black text-amber-300">1.0s</span>
+          </div>
+        </div>
+        <div class="mt-1 flex items-center space-x-1.5">
+          <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-semibold">Active:</span>
+          <span id="ball-count" class="hud-font text-xs sm:text-sm font-bold text-amber-400">1</span>
+        </div>
+      </div>
+
+      <!-- P2 / CPU HUD Info -->
+      <div class="flex items-center space-x-2 sm:space-x-3 text-right">
+        <div>
+          <span id="p2-label" class="hud-font text-xs sm:text-sm font-semibold tracking-wider text-pink-400 block">CPU (AI)</span>
+          <div class="flex items-baseline justify-end space-x-1.5">
+            <span id="p2-score" class="hud-font text-2xl sm:text-4xl font-extrabold text-white">0</span>
+            <span id="p2-target-label" class="hud-font text-[10px] sm:text-xs text-slate-500 font-bold">/50</span>
+          </div>
+        </div>
+        <div class="w-2.5 h-8 sm:w-3 sm:h-10 bg-pink-500 rounded-sm shadow-[0_0_12px_#ec4899]"></div>
+      </div>
+    </div>
+
+    <!-- Active Modifiers Banner List -->
+    <div id="modifiers-bar" class="flex flex-wrap justify-center gap-1.5 px-2 min-h-[26px]">
+      <!-- Dynamically filled with modifier badges -->
+    </div>
+  </header>
+
+  <!-- MAIN CANVAS ARENA -->
+  <main class="w-full max-w-4xl flex justify-center items-center relative z-10 px-1 sm:px-4">
+    <div id="canvas-container" class="relative w-full aspect-[7/4] max-h-[440px] sm:max-h-[480px] bg-slate-900 border-2 border-slate-700/80 rounded-2xl overflow-hidden shadow-2xl crt-overlay">
+      
+      <canvas id="gameCanvas" class="w-full h-full block cursor-none"></canvas>
+
+      <!-- Quick Round Exit Button (Top Right of Arena) -->
+      <button id="arena-exit-btn" title="Exit Current Round" class="absolute top-2.5 right-2.5 z-30 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-950/80 hover:bg-rose-950 border border-slate-700 hover:border-rose-500 text-slate-400 hover:text-rose-300 flex items-center justify-center font-bold text-xs sm:text-sm shadow-md transition-all active:scale-90">
+        ✕
+      </button>
+
+      <!-- Center Trajectory Reticle Label -->
+      <div class="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none flex items-center space-x-1 opacity-75">
+        <span class="text-[9px] sm:text-[10px] hud-font uppercase tracking-widest text-slate-400 font-semibold">Trajectory Aiming</span>
+      </div>
+
+      <!-- In-Game Notification Banner -->
+      <div id="alert-banner" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all duration-300 opacity-0 scale-90 z-30">
+        <div class="bg-slate-950/90 border-2 border-amber-400/80 px-6 py-3 rounded-xl shadow-[0_0_30px_rgba(245,158,11,0.5)] text-center">
+          <span id="banner-text" class="hud-font text-base sm:text-xl font-black text-amber-300 block tracking-wider">CHAOS TRIGGERED!</span>
+          <span id="banner-sub" class="text-xs text-slate-300 font-medium block mt-1">NEW MODIFIER ACTIVE</span>
+        </div>
+      </div>
+
+      <!-- Touch Controls Overlays (Mobile Friendly) -->
+      <div id="touch-left" class="absolute inset-y-0 left-0 w-1/2 opacity-0 z-20 cursor-ns-resize"></div>
+      <div id="touch-right" class="absolute inset-y-0 right-0 w-1/2 opacity-0 z-20 cursor-ns-resize"></div>
+
+      <!-- START & PAUSE OVERLAY -->
+      <div id="overlay" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-40 transition-opacity">
+        <div class="max-w-md w-full bg-slate-900/90 border border-slate-700/80 p-5 sm:p-7 rounded-2xl text-center shadow-2xl">
+          <h1 class="hud-font text-2xl sm:text-3xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-amber-300 to-pink-500 mb-1">
+            MULTIBALL MAYHEM
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-400 font-medium mb-3">
+            Every 1 second, a new ball spawns. Stack chaos modifiers every 30 points!
+          </p>
+          <div class="inline-block bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full text-[11px] font-bold text-amber-400 mb-4">
+            🏆 BEST OF 50 (FIRST TO 50)
+          </div>
+
+          <!-- Mode Selection -->
+          <div class="grid grid-cols-2 gap-2.5 mb-4">
+            <button id="mode-ai" class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all border-cyan-400 bg-cyan-950/40 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.3)]">
+              🤖 1P vs CPU
+            </button>
+            <button id="mode-pvp" class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-500">
+              👥 2P Local
+            </button>
+          </div>
+
+          <!-- Controls Reminder -->
+          <div class="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-left mb-4 space-y-1">
+            <p><b class="text-cyan-400">P1:</b> [W/S] or Mouse or Touch (Left side)</p>
+            <p id="p2-ctrl-text"><b class="text-pink-400">P2:</b> [Up/Down] Arrow Keys or Touch (Right side)</p>
+            <p><b class="text-amber-400">Spacebar:</b> Pause / Resume match</p>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <button id="start-btn" class="w-full py-3 rounded-xl hud-font font-black text-sm sm:text-base uppercase tracking-wider bg-gradient-to-r from-cyan-500 via-amber-400 to-pink-500 hover:opacity-90 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)] transform active:scale-95 transition-all">
+              PLAY NOW
+            </button>
+            <button id="overlay-lab-btn" class="w-full py-2.5 rounded-xl hud-font font-bold text-xs sm:text-sm uppercase tracking-wider bg-purple-950/70 hover:bg-purple-900 border border-purple-500/50 text-purple-200 transition-all">
+              🧪 ENTER CHAOS COMBO LAB
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MATCH OVER (VICTORY) MODAL -->
+      <div id="game-over-modal" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4 z-50">
+        <div class="max-w-md w-full bg-slate-900 border-2 border-slate-700 p-6 rounded-2xl text-center shadow-2xl">
+          <span id="winner-title" class="hud-font text-2xl sm:text-3xl font-black text-cyan-300 uppercase tracking-wide block mb-2">
+            PLAYER 1 VICTORIOUS!
+          </span>
+          <p id="winner-desc" class="text-xs sm:text-sm text-slate-400 mb-5">
+            Championship reached! Final Score: 50 - 38 in the First-to-50 Showdown.
+          </p>
+
+          <div class="flex justify-center items-center space-x-6 py-4 mb-6 bg-slate-950/60 rounded-xl border border-slate-800">
+            <div class="text-center">
+              <span class="hud-font text-xs text-cyan-400 block font-semibold">P1 SCORE</span>
+              <span id="final-p1-score" class="hud-font text-3xl font-extrabold text-white">50</span>
+            </div>
+            <span class="hud-font text-slate-600 text-2xl font-black">-</span>
+            <div class="text-center">
+              <span class="hud-font text-xs text-pink-400 block font-semibold">P2 SCORE</span>
+              <span id="final-p2-score" class="hud-font text-3xl font-extrabold text-white">38</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <button id="rematch-btn" class="w-full py-3 rounded-xl hud-font font-black text-sm uppercase tracking-wider bg-gradient-to-r from-cyan-500 to-pink-500 text-slate-950 shadow-lg hover:opacity-90 transform active:scale-95 transition-all">
+              PLAY AGAIN (REMATCH)
+            </button>
+            <button id="modal-exit-lab-btn" class="hidden w-full py-2.5 rounded-xl hud-font font-bold text-xs uppercase tracking-wider bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-red-200 transition-all">
+              🚪 EXIT LAB (NORMAL MODE)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- BOTTOM CONTROL BAR & ACTION BUTTONS -->
+  <footer class="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2 px-2 sm:px-4 mt-2 sm:mt-3 mb-3 sm:mb-5 z-30">
+    <!-- Action Control Buttons -->
+    <div class="flex items-center space-x-1.5 sm:space-x-2">
+      <button id="pause-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+        Pause (Space)
+      </button>
+      <button id="restart-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+        Restart
+      </button>
+      <button id="exit-round-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-500/40">
+        ✕ Exit Round
+      </button>
+      <button id="audio-toggle" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+        🔊 Sound On
+      </button>
+      <button id="lab-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-500/40 shadow-[0_0_10px_rgba(168,85,247,0.3)]">
+        🧪 Lab Mode
+      </button>
+      <button id="exit-lab-badge-btn" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-red-900/80 hover:bg-red-800 text-red-200 border border-red-500/40">
+        🚪 Exit Lab
+      </button>
+    </div>
+
+    <!-- Secret Developer / Cheat Console Trigger -->
+    <div class="flex items-center">
+      <button id="open-cheat-btn" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wider bg-slate-900 hover:bg-amber-950/70 text-slate-400 hover:text-amber-400 border border-slate-800 hover:border-amber-500/40 transition-all flex items-center space-x-1">
+        <span>⚡</span>
+        <span>[CHEAT CODE]</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- CHAOS COMBO LAB (TEST MODE) MODAL -->
+  <div id="lab-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-3 z-50 overflow-y-auto">
+    <div class="max-w-2xl w-full bg-slate-900 border-2 border-purple-500/70 p-5 sm:p-6 rounded-2xl shadow-[0_0_35px_rgba(168,85,247,0.4)] my-auto max-h-[92vh] flex flex-col">
+      <div class="flex justify-between items-center pb-3 border-b border-slate-800">
+        <div>
+          <h2 class="hud-font text-lg sm:text-xl font-black text-purple-300 flex items-center gap-2">
+            <span>🧪</span> CHAOS COMBO LAB (SANDBOX)
+          </h2>
+          <p class="text-xs text-slate-400">Test stacked modifiers without 30-pt milestone limits or game-ending defeats.</p>
+        </div>
+        <button id="close-lab-btn" class="text-slate-400 hover:text-white text-xl font-bold px-2">&times;</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 pr-1 py-3 space-y-4">
+        <!-- Curated Preset Combos -->
+        <div>
+          <span class="text-xs font-bold tracking-wider text-purple-300 uppercase block mb-2">⭐ Quick Presets</span>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button id="preset-bullet-hell" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-purple-500/30 text-left transition-all">
+              <span class="hud-font text-xs font-bold text-amber-300 block">🔥 Bullet Hell</span>
+              <span class="text-[10px] text-slate-400">Penta + Turbo (10 b/s)</span>
+            </button>
+            <button id="preset-quantum" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-purple-500/30 text-left transition-all">
+              <span class="hud-font text-xs font-bold text-emerald-400 block">〰️ Snakers</span>
+              <span class="text-[10px] text-slate-400">Sine + Micro + Splitter</span>
+            </button>
+            <button id="preset-lockon" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-purple-500/30 text-left transition-all">
+              <span class="hud-font text-xs font-bold text-red-400 block">🎯 Sticky Hunter</span>
+              <span class="text-[10px] text-slate-400">Homing + Glue + Evil</span>
+            </button>
+            <button id="preset-all" class="p-2 rounded-lg bg-slate-800 hover:bg-red-950/70 border border-red-500/40 text-left transition-all">
+              <span class="hud-font text-xs font-bold text-pink-400 block">☠️ Total Chaos</span>
+              <span class="text-[10px] text-slate-400">All 10 Modifiers</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 10 Modifiers Toggle Grid -->
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-bold tracking-wider text-purple-300 uppercase">Interactive Stack Matrix</span>
+            <span id="lab-active-count" class="text-xs font-semibold text-slate-400">0/16 Active</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <button data-mod="frenzy" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">1. Penta Shot</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="turbo" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">2. Double Speed</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="sinusoidal" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">3. Sine Wave</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="micro" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">4. Micro Paddles</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="rapid_spray" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">5. Rapid Spray 20</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="glue" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">6. Glue (Slows 30s)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="evil_spray" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">7. Evil Spray (Targeted)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="charge" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">8. Charge x10 Blast</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="splitter" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">9. Splitter (2x on hit)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="homing" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">10. Homing Lock-On</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="triple_threat" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">11. Me, Myself & I</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="turret" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">12. Sentry Turret (30s)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="dupe" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">13. Dupe (Double Spawner)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="spiral" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">14. Spiral Shot (30)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="wiggle" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300">
+              <span class="text-xs font-semibold">15. Wiggle (1 min)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500">OFF</span>
+            </button>
+            <button data-mod="binary" class="lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300 col-span-2 sm:col-span-3">
+              <span class="text-xs font-mono font-semibold truncate">16. 011000100110100101101110011000010111001001111001 (Binary)</span>
+              <span class="text-[10px] font-bold mod-status text-slate-500 ml-2">OFF</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Testing Actions -->
+        <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+          <button id="lab-clear-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+            Clear All Modifiers
+          </button>
+          <button id="lab-burst-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-900/60 hover:bg-amber-800 text-amber-200 border border-amber-600/40">
+            +10 Ball Volley
+          </button>
+          <button id="lab-wipe-balls-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+            Clear Active Balls
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800 flex justify-between gap-3">
+        <button id="lab-exit-to-match-btn" class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-200">
+          Exit Lab Mode
+        </button>
+        <button id="lab-resume-btn" class="flex-1 py-2.5 rounded-xl hud-font font-bold text-xs uppercase tracking-wider bg-purple-600 hover:bg-purple-500 text-white shadow-lg">
+          Resume Simulation
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHEAT CODE PASSCODE DIALOG MODAL -->
+  <div id="cheat-pass-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="max-w-xs w-full bg-slate-900 border border-slate-700 p-5 rounded-2xl text-center shadow-2xl">
+      <h3 class="hud-font text-base font-bold text-amber-400 mb-1">ENTER PASSCODE</h3>
+      <p class="text-[11px] text-slate-400 mb-3">Provide developer code to open tweak console.</p>
+      <input id="cheat-code-input" type="password" placeholder="Passcode..." class="w-full bg-slate-950 border border-slate-700 px-3 py-2 rounded-lg text-center hud-font text-sm text-amber-300 mb-3 focus:outline-none focus:border-amber-400">
+      <div class="flex space-x-2">
+        <button id="submit-cheat-code-btn" class="flex-1 py-2 bg-amber-500 hover:bg-amber-400 font-bold text-slate-950 text-xs rounded-lg uppercase">
+          Unlock
+        </button>
+        <button id="cancel-cheat-code-btn" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 font-bold text-slate-300 text-xs rounded-lg">
+          Cancel
+        </button>
+      </div>
+      <p id="cheat-error-msg" class="text-[10px] text-red-400 mt-2 hidden">Invalid code! Try again.</p>
+    </div>
+  </div>
+
+  <!-- DEVELOPER & CHEAT CONSOLE MODAL -->
+  <div id="cheat-console-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 z-50 overflow-y-auto">
+    <div class="max-w-md w-full bg-slate-900 border-2 border-amber-500/80 p-5 rounded-2xl shadow-[0_0_35px_rgba(245,158,11,0.3)] my-auto max-h-[92vh] flex flex-col">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+        <div>
+          <h2 class="hud-font text-base font-black text-amber-400 flex items-center gap-1.5">
+            <span>🛠️</span> DEVELOPER / CHEAT CONSOLE
+          </h2>
+          <span class="text-[10px] text-emerald-400 font-semibold">Access Granted: code123456</span>
+        </div>
+        <button id="close-cheat-console-btn" class="text-slate-400 hover:text-white text-lg font-bold px-2">&times;</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 pr-1 py-3 space-y-3.5 text-xs">
+        <!-- Paddle Speed -->
+        <div>
+          <div class="flex justify-between text-slate-300 font-semibold mb-1">
+            <span>Paddle Speed:</span>
+            <span id="cheat-pspeed-val" class="hud-font text-amber-300">550 px/s</span>
+          </div>
+          <input id="slider-pspeed" type="range" min="200" max="1800" step="50" value="550" class="w-full accent-amber-400 cursor-pointer">
+        </div>
+
+        <!-- Paddle Size -->
+        <div>
+          <div class="flex justify-between text-slate-300 font-semibold mb-1">
+            <span>Paddle Height:</span>
+            <span id="cheat-psize-val" class="hud-font text-amber-300">78 px</span>
+          </div>
+          <input id="slider-psize" type="range" min="20" max="180" step="4" value="78" class="w-full accent-amber-400 cursor-pointer">
+        </div>
+
+        <!-- Ball Base Speed -->
+        <div>
+          <div class="flex justify-between text-slate-300 font-semibold mb-1">
+            <span>Ball Speed:</span>
+            <span id="cheat-bspeed-val" class="hud-font text-amber-300">320 px/s</span>
+          </div>
+          <input id="slider-bspeed" type="range" min="150" max="1000" step="25" value="320" class="w-full accent-amber-400 cursor-pointer">
+        </div>
+
+        <!-- Ball Spawn Interval -->
+        <div>
+          <div class="flex justify-between text-slate-300 font-semibold mb-1">
+            <span>Spawn Interval:</span>
+            <span id="cheat-spawn-val" class="hud-font text-amber-300">1.0 s</span>
+          </div>
+          <input id="slider-spawn" type="range" min="0.1" max="3.0" step="0.1" value="1.0" class="w-full accent-amber-400 cursor-pointer">
+        </div>
+
+        <!-- Target Winning Score -->
+        <div>
+          <div class="flex justify-between text-slate-300 font-semibold mb-1">
+            <span>Target Winning Score:</span>
+            <span id="cheat-target-val" class="hud-font text-amber-300">50 pts</span>
+          </div>
+          <input id="slider-target" type="range" min="5" max="200" step="5" value="50" class="w-full accent-amber-400 cursor-pointer">
+        </div>
+
+        <!-- Manual Modifier Stack Toggles -->
+        <div class="pt-2 border-t border-slate-800">
+          <span class="font-bold text-amber-400 block mb-1.5 uppercase text-[11px]">Toggle Active Modifiers</span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button data-mod="frenzy" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Penta Shot</button>
+            <button data-mod="turbo" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Double Speed</button>
+            <button data-mod="sinusoidal" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Sine Wave</button>
+            <button data-mod="micro" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Micro Paddles</button>
+            <button data-mod="rapid_spray" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Rapid Spray 20</button>
+            <button data-mod="glue" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Glue Slime (30s)</button>
+            <button data-mod="evil_spray" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Evil Spray</button>
+            <button data-mod="charge" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Charge x10</button>
+            <button data-mod="splitter" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Splitter</button>
+            <button data-mod="homing" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Homing Lock</button>
+            <button data-mod="triple_threat" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Me Myself & I</button>
+            <button data-mod="turret" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Turret (30s)</button>
+            <button data-mod="dupe" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Dupe Spawner</button>
+            <button data-mod="spiral" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Spiral Shot 30</button>
+            <button data-mod="wiggle" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300">Wiggle (1 min)</button>
+            <button data-mod="binary" class="cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300 col-span-2 font-mono">16. 01100010... (Binary)</button>
+          </div>
+          <button id="cheat-clear-mods-btn" class="w-full mt-2 py-1.5 bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-200 font-bold rounded text-xs">
+            Clear All Active Modifiers
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 flex justify-end">
+        <button id="cheat-resume-btn" class="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 hud-font font-bold rounded-lg text-xs">
+          Resume Simulation
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- SYNTHESIZED WEB AUDIO ENGINE ---
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playPaddleHit() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(740, now + 0.08);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      }
+      playWallHit() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(140, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+      playSpawnChirp() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(540, now);
+        osc.frequency.exponentialRampToValueAtTime(980, now + 0.06);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      }
+      playScore(isP1) {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(isP1 ? 440 : 330, now);
+        osc.frequency.setValueAtTime(isP1 ? 660 : 260, now + 0.1);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+      playChaosAlert() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(840, now + 0.22);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+    }
+
+    const audio = new SoundFX();
+
+    // --- GAME ENGINE CONSTANTS & STATE ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasContainer = document.getElementById('canvas-container');
+
+    const V_WIDTH = 700;
+    const V_HEIGHT = 400;
+
+    let TARGET_SCORE = 50;
+    let BASE_SPAWN_INTERVAL = 1.0;
+    let PADDLE_SPEED = 550;
+    let BASE_BALL_SPEED = 320;
+    let DEFAULT_PADDLE_HEIGHT = 78;
+
+    let isRunning = false;
+    let isPaused = false;
+    let isPvP = false;
+    let isLabSandbox = false;
+
+    let scoreP1 = 0;
+    let scoreP2 = 0;
+    let spawnTimer = 0;
+    let screenShake = 0;
+
+    // Next Ball Trajectory Angles
+    let nextBallAngle = 0;
+    let nextBallDir = 1;
+    let nextDupeBallAngle = 0;
+    let nextDupeBallDir = -1;
+
+    // Modifiers Engine
+    const ALL_MODIFIERS = [
+      'frenzy', 'turbo', 'sinusoidal', 'micro', 'rapid_spray', 
+      'glue', 'evil_spray', 'charge', 'splitter', 'homing',
+      'triple_threat', 'turret', 'dupe', 'spiral', 'wiggle', 'binary'
+    ];
+    let activeModifiers = new Set();
+    let p1Milestones = new Set();
+    let p2Milestones = new Set();
+
+    // Modifier Mechanics States
+    let sprayRemaining = 0;
+    let sprayIntervalTimer = 0;
+    let evilSprayRemaining = 0;
+    let evilSprayTimer = 0;
+    let evilSprayTargetPlayer = 2;
+    let chargeCount = 0;
+    let chargeTimer = 0;
+    let splitterRemaining = 0;
+    let homingTargetPlayer = 2;
+
+    // Modifiers 11, 12, 13 States
+    let tripleTargetPlayer = 1;
+    let turrets = [];
+    let dupeSpawnTimer = 0;
+
+    // Modifiers 14, 15 States
+    let spiralRemaining = 0;
+    let spiralTimer = 0;
+    let spiralIndex = 0;
+    let wiggleTimer = 0;
+    let wiggleWavePhase = 0;
+
+    // Timed Modifier Countdowns
+    let glueTimer = 0;
+    let microTimer = 0;
+    let homingTimer = 0;
+    let tripleThreatTimer = 0;
+
+    // Elements
+    const p1ScoreEl = document.getElementById('p1-score');
+    const p2ScoreEl = document.getElementById('p2-score');
+    const p1TargetLabel = document.getElementById('p1-target-label');
+    const p2TargetLabel = document.getElementById('p2-target-label');
+    const spawnTimerEl = document.getElementById('spawn-timer');
+    const spawnRingEl = document.getElementById('spawn-ring');
+    const ballCountEl = document.getElementById('ball-count');
+    const modifiersBar = document.getElementById('modifiers-bar');
+    const alertBanner = document.getElementById('alert-banner');
+    const bannerText = document.getElementById('banner-text');
+    const bannerSub = document.getElementById('banner-sub');
+    const overlay = document.getElementById('overlay');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const winnerTitle = document.getElementById('winner-title');
+    const winnerDesc = document.getElementById('winner-desc');
+    const finalP1Score = document.getElementById('final-p1-score');
+    const finalP2Score = document.getElementById('final-p2-score');
+    const modalExitLabBtn = document.getElementById('modal-exit-lab-btn');
+    const exitLabBadgeBtn = document.getElementById('exit-lab-badge-btn');
+
+    // Controls
+    const keys = {};
+    let touchYLeft = null;
+    let touchYRight = null;
+
+    // Paddles & Entities
+    const player1 = {
+      x: 18,
+      y: (V_HEIGHT - DEFAULT_PADDLE_HEIGHT) / 2,
+      w: 12,
+      h: DEFAULT_PADDLE_HEIGHT,
+      color: '#22d3ee'
+    };
+
+    const player2 = {
+      x: V_WIDTH - 30,
+      y: (V_HEIGHT - DEFAULT_PADDLE_HEIGHT) / 2,
+      w: 12,
+      h: DEFAULT_PADDLE_HEIGHT,
+      color: '#ec4899'
+    };
+
+    let balls = [];
+    let particles = [];
+
+    // --- BALL CLASS ---
+    class Ball {
+      constructor(x, y, vx, vy, isSinusoidal = false, radius = 6, color = null, isTurretBullet = false) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.baseVx = vx;
+        this.baseVy = vy;
+        this.vx = vx;
+        this.vy = vy;
+        this.isSineWave = isSinusoidal;
+        this.sineTimer = Math.random() * Math.PI * 2;
+        this.waveBaseY = y;
+        this.color = color || (Math.random() > 0.5 ? '#22d3ee' : '#ec4899');
+        this.isTurretBullet = isTurretBullet; // Destroys upon hitting opponent's paddle
+        this.trail = [];
+      }
+
+      update(dt) {
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > 6) this.trail.shift();
+
+        // 15. Wiggle Modifier (50% to 150% speed oscillation)
+        let speedMultiplier = 1.0;
+        if (activeModifiers.has('wiggle')) {
+          // Oscillate between 0.5 and 1.5 using a smooth sine wave
+          speedMultiplier = 1.0 + Math.sin(wiggleWavePhase + (this.x * 0.015)) * 0.5;
+        }
+
+        // Sinusoidal Motion
+        if (this.isSineWave || activeModifiers.has('sinusoidal')) {
+          this.sineTimer += dt * 9;
+          this.waveBaseY += this.vy * speedMultiplier * dt;
+          if (this.waveBaseY <= this.radius + 4) {
+            this.waveBaseY = this.radius + 4;
+            this.vy = Math.abs(this.vy);
+          } else if (this.waveBaseY >= V_HEIGHT - this.radius - 4) {
+            this.waveBaseY = V_HEIGHT - this.radius - 4;
+            this.vy = -Math.abs(this.vy);
+          }
+          this.y = this.waveBaseY + Math.sin(this.sineTimer) * 26;
+        } else {
+          this.y += this.vy * speedMultiplier * dt;
+        }
+
+        // Homing Lock-On Modifier
+        if (activeModifiers.has('homing')) {
+          const targetPaddle = homingTargetPlayer === 1 ? player1 : player2;
+          const isHeadingToTarget = (homingTargetPlayer === 1 && this.vx < 0) || (homingTargetPlayer === 2 && this.vx > 0);
+          if (isHeadingToTarget) {
+            const paddleCenterY = targetPaddle.y + targetPaddle.h / 2;
+            const diffY = paddleCenterY - this.y;
+            
+            // Nerfed homing: smooth gentle curvature instead of aggressive instant-snap
+            const homingForce = 360; // Reduced from 750
+            const steerStrength = Math.min(1.0, Math.abs(diffY) / 30);
+            this.vy += Math.sign(diffY) * homingForce * steerStrength * dt;
+
+            // Cap max vertical speed so it curves naturally rather than instantly teleporting
+            const maxHomingVy = 380;
+            this.vy = Math.max(-maxHomingVy, Math.min(maxHomingVy, this.vy));
+
+            if (this.isSineWave) {
+              this.waveBaseY = this.y;
+            }
+          }
+        }
+
+        this.x += this.vx * speedMultiplier * dt;
+
+        // Top & Bottom Wall Bounce
+        if (this.y - this.radius <= 0) {
+          this.y = this.radius;
+          this.vy = Math.abs(this.vy);
+          audio.playWallHit();
+          createSparks(this.x, this.y, '#f59e0b', 5);
+        } else if (this.y + this.radius >= V_HEIGHT) {
+          this.y = V_HEIGHT - this.radius;
+          this.vy = -Math.abs(this.vy);
+          audio.playWallHit();
+          createSparks(this.x, this.y, '#f59e0b', 5);
+        }
+      }
+
+      draw() {
+        // Neon trail
+        for (let i = 0; i < this.trail.length; i++) {
+          const t = this.trail[i];
+          const alpha = (i + 1) / (this.trail.length * 2.5);
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, this.radius * (0.4 + (i / this.trail.length) * 0.6), 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.globalAlpha = alpha;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Main Ball
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // --- PARTICLE SPARKS ---
+    function createSparks(x, y, color, count = 8) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 40 + Math.random() * 160;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.35 + Math.random() * 0.25,
+          maxLife: 0.5,
+          color,
+          size: 1.5 + Math.random() * 2
+        });
+      }
+    }
+
+    // --- SPAWNER INTERVAL CALCULATOR ---
+    function getSpawnInterval() {
+      let interval = BASE_SPAWN_INTERVAL;
+      if (activeModifiers.has('turbo') || activeModifiers.has('charge')) {
+        interval *= 0.5;
+      }
+      return Math.max(0.1, interval);
+    }
+
+    // --- TRAJECTORY CALCULATION ---
+    function calculateNextTrajectory() {
+      nextBallDir = Math.random() > 0.5 ? 1 : -1;
+      const angleOffset = (Math.random() - 0.5) * (Math.PI / 3); // ±30 degrees
+      nextBallAngle = nextBallDir === 1 ? angleOffset : Math.PI - angleOffset;
+
+      // Dupe spawner trajectory
+      nextDupeBallDir = Math.random() > 0.5 ? 1 : -1;
+      const dupeOffset = (Math.random() - 0.5) * (Math.PI / 3);
+      nextDupeBallAngle = nextDupeBallDir === 1 ? dupeOffset : Math.PI - dupeOffset;
+    }
+
+    // --- SPAWN ONE BALL ---
+    function spawnBall(angle = null, speedMultiplier = 1.0, isSine = false, radius = 6, color = null, originX = V_WIDTH / 2, originY = V_HEIGHT / 2, isTurretBullet = false) {
+      const theta = angle !== null ? angle : nextBallAngle;
+      const speed = BASE_BALL_SPEED * speedMultiplier;
+      const vx = Math.cos(theta) * speed;
+      const vy = Math.sin(theta) * speed;
+      const ball = new Ball(originX, originY, vx, vy, isSine || activeModifiers.has('sinusoidal'), radius, color, isTurretBullet);
+      balls.push(ball);
+      audio.playSpawnChirp();
+      createSparks(originX, originY, isTurretBullet ? '#eab308' : '#fbbf24', 6);
+      return ball;
+    }
+
+    // --- STANDARD 1-SECOND VOLLEY ---
+    function fireScheduledVolley(originX = V_WIDTH / 2, originY = V_HEIGHT / 2, angleToUse = null) {
+      const targetAngle = angleToUse !== null ? angleToUse : nextBallAngle;
+
+      // 8. Charge x10 Mechanic
+      if (activeModifiers.has('charge')) {
+        chargeCount++;
+        audio.playWallHit();
+        createSparks(originX, originY, '#818cf8', 8);
+        if (chargeCount >= 10) {
+          chargeCount = 0;
+          for (let k = 0; k < 10; k++) {
+            const burstAngle = (k / 10) * Math.PI * 2;
+            spawnBall(burstAngle, 1.25, false, 7, '#818cf8', originX, originY);
+          }
+          audio.playChaosAlert();
+          screenShake = 12;
+        }
+        if (originX === V_WIDTH / 2) calculateNextTrajectory();
+        return;
+      }
+
+      // 1. Penta Shot (Frenzy)
+      if (activeModifiers.has('frenzy')) {
+        const spreadStep = Math.PI / 48; // Tight ~3.75 deg fan
+        for (let k = -2; k <= 2; k++) {
+          spawnBall(targetAngle + k * spreadStep, 1.05, false, 5.5, '#f59e0b', originX, originY);
+        }
+      } else {
+        spawnBall(targetAngle, 1.0, false, 6, null, originX, originY);
+      }
+
+      if (originX === V_WIDTH / 2 && originY === V_HEIGHT / 2) {
+        calculateNextTrajectory();
+      }
+    }
+
+    // --- TURRET BULLET VOLLEY (Inherits all main ball modifiers) ---
+    function fireTurretBullet(t) {
+      const targetDir = t.player === 1 ? 1 : -1;
+      const baseAngle = targetDir === 1 ? 0 : Math.PI;
+
+      if (activeModifiers.has('frenzy')) {
+        const spreadStep = Math.PI / 48;
+        for (let k = -2; k <= 2; k++) {
+          spawnBall(baseAngle + k * spreadStep, 1.3, false, 5.5, t.player === 1 ? '#22d3ee' : '#ec4899', t.x, t.y, true);
+        }
+      } else {
+        const theta = baseAngle + (Math.random() - 0.5) * 0.2;
+        spawnBall(theta, 1.25, false, 6, t.player === 1 ? '#22d3ee' : '#ec4899', t.x, t.y, true);
+      }
+    }
+
+    // --- MODIFIER TOGGLING & STATE SYNC ---
+    function toggleModifier(modName, forceState = null) {
+      const willBeActive = forceState !== null ? forceState : !activeModifiers.has(modName);
+      if (willBeActive) {
+        activeModifiers.add(modName);
+        if (modName === 'binary') {
+          // Half the arena height
+          player1.h = V_HEIGHT / 2;
+          player2.h = V_HEIGHT / 2;
+          // Snap immediately to either 0 (top) or V_HEIGHT / 2 (bottom)
+          player1.y = player1.y < V_HEIGHT / 4 ? 0 : V_HEIGHT / 2;
+          player2.y = player2.y < V_HEIGHT / 4 ? 0 : V_HEIGHT / 2;
+        } else if (modName === 'glue') {
+          glueTimer = 30.0;
+        } else if (modName === 'micro') {
+          microTimer = 30.0;
+          if (!activeModifiers.has('binary')) {
+            player1.h = DEFAULT_PADDLE_HEIGHT * 0.5;
+            player2.h = DEFAULT_PADDLE_HEIGHT * 0.5;
+          }
+        } else if (modName === 'rapid_spray') {
+          sprayRemaining = 20;
+          sprayIntervalTimer = 0;
+        } else if (modName === 'spiral') {
+          spiralRemaining = 30;
+          spiralTimer = 0;
+          spiralIndex = 0;
+        } else if (modName === 'wiggle') {
+          wiggleTimer = 60.0;
+        } else if (modName === 'evil_spray') {
+          evilSprayRemaining = 20;
+          evilSprayTimer = 0;
+          evilSprayTargetPlayer = Math.random() > 0.5 ? 1 : 2;
+        } else if (modName === 'splitter') {
+          splitterRemaining = 10;
+        } else if (modName === 'homing') {
+          homingTimer = 30.0;
+          homingTargetPlayer = Math.random() > 0.5 ? 1 : 2;
+        } else if (modName === 'triple_threat') {
+          tripleThreatTimer = 30.0;
+          tripleTargetPlayer = Math.random() > 0.5 ? 1 : 2;
+          const target = tripleTargetPlayer === 1 ? player1 : player2;
+          if (!activeModifiers.has('binary')) {
+            target.h = DEFAULT_PADDLE_HEIGHT * 0.45;
+          }
+        } else if (modName === 'turret') {
+          const turretOwner = Math.random() > 0.5 ? 1 : 2;
+          const tx = turretOwner === 1 ? 65 : V_WIDTH - 65;
+          const ty = V_HEIGHT / 2;
+          turrets.push({ x: tx, y: ty, player: turretOwner, timer: 0, life: 30.0, maxLife: 30.0 });
+        } else if (modName === 'dupe') {
+          dupeSpawnTimer = 0;
+          // Duplicate existing turrets if any
+          if (turrets.length > 0) {
+            const extraTurrets = [];
+            turrets.forEach(t => {
+              extraTurrets.push({
+                x: t.x,
+                y: t.y < V_HEIGHT / 2 ? t.y + 110 : t.y - 110,
+                player: t.player,
+                timer: t.timer,
+                life: t.life,
+                maxLife: t.maxLife
+              });
+            });
+            turrets.push(...extraTurrets);
+          }
+        }
+      } else {
+        activeModifiers.delete(modName);
+        if (modName === 'binary') {
+          let baseH = DEFAULT_PADDLE_HEIGHT;
+          if (activeModifiers.has('micro')) baseH *= 0.5;
+          player1.h = activeModifiers.has('triple_threat') && tripleTargetPlayer === 1 ? baseH * 0.45 : baseH;
+          player2.h = activeModifiers.has('triple_threat') && tripleTargetPlayer === 2 ? baseH * 0.45 : baseH;
+        } else if (modName === 'glue') {
+          glueTimer = 0;
+        } else if (modName === 'micro') {
+          microTimer = 0;
+          if (!activeModifiers.has('binary')) {
+            player1.h = activeModifiers.has('triple_threat') && tripleTargetPlayer === 1 ? DEFAULT_PADDLE_HEIGHT * 0.45 : DEFAULT_PADDLE_HEIGHT;
+            player2.h = activeModifiers.has('triple_threat') && tripleTargetPlayer === 2 ? DEFAULT_PADDLE_HEIGHT * 0.45 : DEFAULT_PADDLE_HEIGHT;
+          }
+        } else if (modName === 'homing') {
+          homingTimer = 0;
+        } else if (modName === 'triple_threat') {
+          tripleThreatTimer = 0;
+          if (!activeModifiers.has('binary')) {
+            player1.h = activeModifiers.has('micro') ? DEFAULT_PADDLE_HEIGHT * 0.5 : DEFAULT_PADDLE_HEIGHT;
+            player2.h = activeModifiers.has('micro') ? DEFAULT_PADDLE_HEIGHT * 0.5 : DEFAULT_PADDLE_HEIGHT;
+          }
+        } else if (modName === 'charge') {
+          chargeCount = 0;
+        } else if (modName === 'turret') {
+          turrets = [];
+        } else if (modName === 'spiral') {
+          spiralRemaining = 0;
+        } else if (modName === 'wiggle') {
+          wiggleTimer = 0;
+        }
+      }
+
+      updateModifierBadges();
+      syncLabMatrixUI();
+      syncCheatModalUI();
+    }
+
+    function clearAllModifiers() {
+      activeModifiers.clear();
+      player1.h = DEFAULT_PADDLE_HEIGHT;
+      player2.h = DEFAULT_PADDLE_HEIGHT;
+      sprayRemaining = 0;
+      evilSprayRemaining = 0;
+      chargeCount = 0;
+      splitterRemaining = 0;
+      turrets = [];
+      dupeSpawnTimer = 0;
+      spiralRemaining = 0;
+      wiggleTimer = 0;
+      glueTimer = 0;
+      microTimer = 0;
+      homingTimer = 0;
+      tripleThreatTimer = 0;
+      updateModifierBadges();
+      syncLabMatrixUI();
+      syncCheatModalUI();
+    }
+
+    // --- HUD MODIFIER BADGES ---
+    function updateModifierBadges() {
+      modifiersBar.innerHTML = '';
+      if (activeModifiers.size === 0) return;
+
+      const badgeDefs = {
+        frenzy: { label: '🔥 PENTA (5x)', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+        turbo: { label: '⚡ TURBO (2x)', cls: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
+        sinusoidal: { label: '〰️ SINE WAVE', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+        micro: { label: `📏 MICRO (${Math.ceil(microTimer)}s)`, cls: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+        rapid_spray: { label: '💥 RAPID SPRAY', cls: 'bg-red-500/20 text-red-300 border-red-500/40' },
+        glue: { label: `🧪 GLUE (${Math.ceil(glueTimer)}s)`, cls: 'bg-lime-500/20 text-lime-300 border-lime-500/40' },
+        evil_spray: { label: `👿 EVIL SPRAY (P${evilSprayTargetPlayer})`, cls: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+        charge: { label: `🌀 CHARGE (${chargeCount}/10)`, cls: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
+        splitter: { label: `✂️ SPLITTER (${splitterRemaining})`, cls: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
+        homing: { label: `🎯 HOMING (P${homingTargetPlayer} - ${Math.ceil(homingTimer)}s)`, cls: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40' },
+        triple_threat: { label: `👥 3 PADDLES (P${tripleTargetPlayer} - ${Math.ceil(tripleThreatTimer)}s)`, cls: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+        turret: { label: `🗼 TURRET (${turrets.length})`, cls: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' },
+        dupe: { label: `✨ DUPE (2X SPAWNERS)`, cls: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+        spiral: { label: `🌀 SPIRAL (${spiralRemaining})`, cls: 'bg-violet-500/20 text-violet-300 border-violet-500/40' },
+        wiggle: { label: `🌊 WIGGLE (${Math.ceil(wiggleTimer)}s)`, cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+        binary: { label: '0101 BINARY [0/1]', cls: 'bg-emerald-950/70 text-emerald-300 border-emerald-400 font-mono shadow-[0_0_8px_rgba(52,211,153,0.3)]' }
+      };
+
+      activeModifiers.forEach(mod => {
+        const info = badgeDefs[mod];
+        if (!info) return;
+        const badge = document.createElement('div');
+        badge.className = `px-2 py-0.5 rounded-full text-[10px] font-bold border tracking-wider hud-font ${info.cls}`;
+        badge.innerText = info.label;
+        modifiersBar.appendChild(badge);
+      });
+    }
+
+    // --- ANNOUNCEMENT BANNER ---
+    function triggerBanner(title, subtitle) {
+      bannerText.innerText = title;
+      bannerSub.innerText = subtitle;
+      alertBanner.classList.remove('opacity-0', 'scale-90');
+      alertBanner.classList.add('opacity-100', 'scale-100');
+      audio.playChaosAlert();
+      setTimeout(() => {
+        alertBanner.classList.remove('opacity-100', 'scale-100');
+        alertBanner.classList.add('opacity-0', 'scale-90');
+      }, 1800);
+    }
+
+    // --- CHECK MILESTONES (EVERY MULTIPLE OF 30) ---
+    function checkChaosTrigger() {
+      if (isLabSandbox) return; // Disabled only in Lab mode
+
+      // Check milestones for P1 (30, 60, 90, 120, etc.)
+      const p1Milestone = Math.floor(scoreP1 / 30) * 30;
+      if (p1Milestone >= 30 && !p1Milestones.has(p1Milestone)) {
+        p1Milestones.add(p1Milestone);
+        triggerRandomStackedModifier(p1Milestone, 1);
+      }
+
+      // Check milestones for P2 (30, 60, 90, 120, etc.)
+      const p2Milestone = Math.floor(scoreP2 / 30) * 30;
+      if (p2Milestone >= 30 && !p2Milestones.has(p2Milestone)) {
+        p2Milestones.add(p2Milestone);
+        triggerRandomStackedModifier(p2Milestone, 2);
+      }
+    }
+
+    function triggerRandomStackedModifier(milestoneScore, scoringPlayer = 1) {
+      // Find inactive modifiers first; if all are already active, pick any to re-trigger / replenish
+      const inactive = ALL_MODIFIERS.filter(m => !activeModifiers.has(m));
+      const chosen = inactive.length > 0 
+        ? inactive[Math.floor(Math.random() * inactive.length)] 
+        : ALL_MODIFIERS[Math.floor(Math.random() * ALL_MODIFIERS.length)];
+
+      toggleModifier(chosen, true);
+
+      const modNames = {
+        frenzy: 'PENTA SHOT (5X)',
+        turbo: 'DOUBLE SPEED (2X)',
+        sinusoidal: 'SINE WAVE MOTION',
+        micro: 'MICRO PADDLES',
+        rapid_spray: 'RAPID SPRAY 20',
+        glue: 'GLUE SLIME SLOWDOWN (30s)',
+        evil_spray: 'EVIL TARGETED SPRAY',
+        charge: 'CHARGE SUPERNOVA BLAST',
+        splitter: 'BALL SPLITTER',
+        homing: 'HOMING LOCK-ON',
+        triple_threat: 'ME, MYSELF & I (TRIPLE PADDLES)',
+        turret: 'SENTRY TURRET UNLEASHED',
+        dupe: 'DUPE (DOUBLE COURT SPAWNER)',
+        spiral: 'SPIRAL SPRAY 30',
+        wiggle: 'WIGGLE SPEED FLUCTUATION (1 MIN)',
+        binary: '01100010... (BINARY PADDLES)'
+      };
+
+      const pLabel = scoringPlayer === 1 ? 'P1' : (isPvP ? 'P2' : 'CPU');
+      triggerBanner(`⚠️ ${milestoneScore} POINTS REACHED! ⚠️`, `${pLabel} UNLEASHED: ${modNames[chosen] || chosen}`);
+      screenShake = 12;
+    }
+
+    // --- MATCH STATUS CHECK ---
+    function checkMatchWinner() {
+      // In Lab / Test Mode, infinite play - match never ends
+      if (isLabSandbox) return false;
+
+      if (scoreP1 >= TARGET_SCORE || scoreP2 >= TARGET_SCORE) {
+        scoreP1 = Math.min(scoreP1, TARGET_SCORE);
+        scoreP2 = Math.min(scoreP2, TARGET_SCORE);
+        p1ScoreEl.innerText = scoreP1;
+        p2ScoreEl.innerText = scoreP2;
+
+        isRunning = false;
+        isPaused = true;
+
+        const isP1Winner = scoreP1 >= TARGET_SCORE;
+        winnerTitle.innerText = isP1Winner ? 'PLAYER 1 VICTORIOUS!' : (isPvP ? 'PLAYER 2 VICTORIOUS!' : 'CPU WINS!');
+        winnerTitle.className = isP1Winner 
+          ? 'hud-font text-2xl sm:text-3xl font-black text-cyan-300 uppercase tracking-wide' 
+          : 'hud-font text-2xl sm:text-3xl font-black text-pink-400 uppercase tracking-wide';
+        
+        winnerDesc.innerText = `Championship reached! Final Score: ${scoreP1} - ${scoreP2} in the First-to-${TARGET_SCORE} Showdown.`;
+        finalP1Score.innerText = scoreP1;
+        finalP2Score.innerText = scoreP2;
+
+        modalExitLabBtn.classList.add('hidden');
+        gameOverModal.classList.remove('hidden');
+        audio.playScore(isP1Winner);
+        return true;
+      }
+      return false;
+    }
+
+    // --- GAME UPDATE TICK ---
+    function update(dt) {
+      if (!isRunning || isPaused) return;
+
+      // Handle Screen Shake
+      if (screenShake > 0) screenShake = Math.max(0, screenShake - dt * 25);
+
+      // Speed Modifier calculation
+      let currentPaddleSpeed = PADDLE_SPEED;
+      if (activeModifiers.has('glue')) {
+        currentPaddleSpeed *= 0.45; // Glue slows by 55%
+      }
+
+      // 16. BINARY MODIFIER INPUT HANDLING (Paddles can only be top [0] or bottom [1])
+      if (activeModifiers.has('binary')) {
+        player1.h = V_HEIGHT / 2;
+        player2.h = V_HEIGHT / 2;
+
+        // Player 1 Binary Positioning
+        if (keys['KeyW'] || keys['Keyw']) {
+          player1.y = 0;
+        } else if (keys['KeyS'] || keys['Keys']) {
+          player1.y = V_HEIGHT / 2;
+        } else if (touchYLeft !== null) {
+          player1.y = touchYLeft < V_HEIGHT / 2 ? 0 : V_HEIGHT / 2;
+        }
+
+        // Player 2 Binary Positioning
+        if (isPvP) {
+          if (keys['ArrowUp']) {
+            player2.y = 0;
+          } else if (keys['ArrowDown']) {
+            player2.y = V_HEIGHT / 2;
+          } else if (touchYRight !== null) {
+            player2.y = touchYRight < V_HEIGHT / 2 ? 0 : V_HEIGHT / 2;
+          }
+        } else {
+          // AI Binary State Selection: track most dangerous incoming ball
+          let incomingBall = null;
+          let minTimeToReach = Infinity;
+          for (let b of balls) {
+            if (b.vx > 0) {
+              const timeToReach = (player2.x - b.x) / b.vx;
+              if (timeToReach > 0 && timeToReach < minTimeToReach) {
+                minTimeToReach = timeToReach;
+                incomingBall = b;
+              }
+            }
+          }
+          if (incomingBall) {
+            let predictedY = incomingBall.y + incomingBall.vy * Math.min(minTimeToReach, 1.2);
+            if (predictedY < 0) predictedY = Math.abs(predictedY);
+            if (predictedY > V_HEIGHT) predictedY = V_HEIGHT - (predictedY - V_HEIGHT);
+            player2.y = predictedY < V_HEIGHT / 2 ? 0 : V_HEIGHT / 2;
+          }
+        }
+      } else {
+        // --- STANDARD ANALOG PLAYER 1 INPUT ---
+        if (keys['KeyW'] || keys['Keyw']) {
+          player1.y -= currentPaddleSpeed * dt;
+        } else if (keys['KeyS'] || keys['Keys']) {
+          player1.y += currentPaddleSpeed * dt;
+        } else if (touchYLeft !== null) {
+          const destY = touchYLeft - player1.h / 2;
+          player1.y += (destY - player1.y) * Math.min(1.0, dt * 18);
+        }
+        player1.y = Math.max(5, Math.min(V_HEIGHT - player1.h - 5, player1.y));
+
+        // --- STANDARD ANALOG PLAYER 2 INPUT (PVP OR CPU AI) ---
+        if (isPvP) {
+          if (keys['ArrowUp']) {
+            player2.y -= currentPaddleSpeed * dt;
+          } else if (keys['ArrowDown']) {
+            player2.y += currentPaddleSpeed * dt;
+          } else if (touchYRight !== null) {
+            const destY = touchYRight - player2.h / 2;
+            player2.y += (destY - player2.y) * Math.min(1.0, dt * 18);
+          }
+        } else {
+          // Multi-ball tracking CPU AI
+          let targetBall = null;
+          let minTimeToReach = Infinity;
+
+          for (let b of balls) {
+            if (b.vx > 0) {
+              const timeToReach = (player2.x - b.x) / b.vx;
+              if (timeToReach > 0 && timeToReach < minTimeToReach) {
+                minTimeToReach = timeToReach;
+                targetBall = b;
+              }
+            }
+          }
+
+          let targetY = (V_HEIGHT - player2.h) / 2;
+          if (targetBall) {
+            let predictedY = targetBall.y + targetBall.vy * Math.min(minTimeToReach, 1.2);
+            if (predictedY < 0) predictedY = Math.abs(predictedY);
+            if (predictedY > V_HEIGHT) predictedY = V_HEIGHT - (predictedY - V_HEIGHT);
+            targetY = predictedY - player2.h / 2;
+          }
+
+          const aiDiff = targetY - player2.y;
+          const aiSpeed = currentPaddleSpeed * 0.92;
+          if (Math.abs(aiDiff) > 8) {
+            player2.y += Math.sign(aiDiff) * Math.min(Math.abs(aiDiff), aiSpeed * dt);
+          }
+        }
+        player2.y = Math.max(5, Math.min(V_HEIGHT - player2.h - 5, player2.y));
+      }
+
+      // --- 1-SECOND VOLLEY SPAWN TIMER ---
+      const activeInterval = getSpawnInterval();
+      spawnTimer += dt;
+      if (spawnTimer >= activeInterval) {
+        spawnTimer -= activeInterval;
+        fireScheduledVolley();
+      }
+
+      // Dupe spawner interval
+      if (activeModifiers.has('dupe')) {
+        dupeSpawnTimer += dt;
+        if (dupeSpawnTimer >= activeInterval) {
+          dupeSpawnTimer -= activeInterval;
+          fireScheduledVolley(V_WIDTH / 2, V_HEIGHT / 2 + 70, nextDupeBallAngle);
+        }
+      }
+
+      // Turret firing timers
+      if (activeModifiers.has('turret') && turrets.length > 0) {
+        const turretFireInterval = (activeModifiers.has('turbo') || activeModifiers.has('charge')) ? 0.6 : 1.2;
+        for (let i = turrets.length - 1; i >= 0; i--) {
+          const t = turrets[i];
+          t.life -= dt;
+          if (t.life <= 0) {
+            turrets.splice(i, 1);
+            continue;
+          }
+          t.timer += dt;
+          if (t.timer >= turretFireInterval) {
+            t.timer = 0;
+            fireTurretBullet(t);
+          }
+        }
+      }
+
+      // --- 30-SECOND & 60-SECOND DURATION MODIFIER TICKS ---
+      let timedBadgeUpdateNeeded = false;
+
+      // 6. Glue 30s Countdown
+      if (activeModifiers.has('glue')) {
+        glueTimer -= dt;
+        timedBadgeUpdateNeeded = true;
+        if (glueTimer <= 0) {
+          toggleModifier('glue', false);
+        }
+      }
+
+      // 4. Micro Paddles 30s Countdown
+      if (activeModifiers.has('micro')) {
+        microTimer -= dt;
+        timedBadgeUpdateNeeded = true;
+        if (microTimer <= 0) {
+          toggleModifier('micro', false);
+        }
+      }
+
+      // 10. Homing 30s Countdown
+      if (activeModifiers.has('homing')) {
+        homingTimer -= dt;
+        timedBadgeUpdateNeeded = true;
+        if (homingTimer <= 0) {
+          toggleModifier('homing', false);
+        }
+      }
+
+      // 11. Me, Myself & I 30s Countdown
+      if (activeModifiers.has('triple_threat')) {
+        tripleThreatTimer -= dt;
+        timedBadgeUpdateNeeded = true;
+        if (tripleThreatTimer <= 0) {
+          toggleModifier('triple_threat', false);
+        }
+      }
+
+      // 15. Wiggle 1 min (60s) Countdown & Wave Tick
+      if (activeModifiers.has('wiggle')) {
+        wiggleTimer -= dt;
+        wiggleWavePhase += dt * 4.5; // Controls the tempo of the speed fluctuation
+        timedBadgeUpdateNeeded = true;
+        if (wiggleTimer <= 0) {
+          toggleModifier('wiggle', false);
+        }
+      }
+
+      if (timedBadgeUpdateNeeded) {
+        updateModifierBadges();
+      }
+
+      // --- 14. SPIRAL SHOT MECHANIC (30 Bullets Evenly Spread in Circle) ---
+      if (activeModifiers.has('spiral') && spiralRemaining > 0) {
+        spiralTimer += dt;
+        if (spiralTimer >= 0.045) { // Rapid ~45ms rhythm
+          spiralTimer = 0;
+          spiralRemaining--;
+          const theta = (spiralIndex / 30) * Math.PI * 2;
+          spiralIndex++;
+          spawnBall(theta, 1.2, false, 5, '#8b5cf6', V_WIDTH / 2, V_HEIGHT / 2);
+
+          // Stack with Dupe: Emit matching spiral from second spawner
+          if (activeModifiers.has('dupe')) {
+            spawnBall(theta, 1.2, false, 5, '#06b6d4', V_WIDTH / 2, V_HEIGHT / 2 + 70);
+          }
+
+          if (spiralRemaining <= 0) toggleModifier('spiral', false);
+        }
+      }
+
+      // --- 5. RAPID SPRAY MECHANIC ---
+      if (activeModifiers.has('rapid_spray') && sprayRemaining > 0) {
+        sprayIntervalTimer += dt;
+        if (sprayIntervalTimer >= 0.1) {
+          sprayIntervalTimer = 0;
+          sprayRemaining--;
+          const sprayAngle = (Math.random() - 0.5) * (Math.PI / 2.5);
+          const sprayDir = Math.random() > 0.5 ? 1 : -1;
+          const theta = sprayDir === 1 ? sprayAngle : Math.PI - sprayAngle;
+          spawnBall(theta, 1.25, false, 5, '#ef4444', V_WIDTH / 2, V_HEIGHT / 2);
+
+          // Stack with Dupe: Emit parallel rapid spray from second spawner
+          if (activeModifiers.has('dupe')) {
+            const dupeSprayAngle = (Math.random() - 0.5) * (Math.PI / 2.5);
+            const dupeSprayDir = Math.random() > 0.5 ? 1 : -1;
+            const dupeTheta = dupeSprayDir === 1 ? dupeSprayAngle : Math.PI - dupeSprayAngle;
+            spawnBall(dupeTheta, 1.25, false, 5, '#f87171', V_WIDTH / 2, V_HEIGHT / 2 + 70);
+          }
+
+          if (sprayRemaining <= 0) toggleModifier('rapid_spray', false);
+        }
+      }
+
+      // --- 7. EVIL SPRAY MECHANIC ---
+      if (activeModifiers.has('evil_spray') && evilSprayRemaining > 0) {
+        evilSprayTimer += dt;
+        if (evilSprayTimer >= 0.08) {
+          evilSprayTimer = 0;
+          evilSprayRemaining--;
+          const targetDir = evilSprayTargetPlayer === 1 ? -1 : 1;
+          const theta = targetDir === 1 ? (Math.random() - 0.5) * 0.4 : Math.PI + (Math.random() - 0.5) * 0.4;
+          spawnBall(theta, 1.35, false, 5, '#e11d48', V_WIDTH / 2, V_HEIGHT / 2);
+
+          // Stack with Dupe: Direct targeted evil spray from second spawner too
+          if (activeModifiers.has('dupe')) {
+            const dupeTheta = targetDir === 1 ? (Math.random() - 0.5) * 0.4 : Math.PI + (Math.random() - 0.5) * 0.4;
+            spawnBall(dupeTheta, 1.35, false, 5, '#fb7185', V_WIDTH / 2, V_HEIGHT / 2 + 70);
+          }
+
+          if (evilSprayRemaining <= 0) toggleModifier('evil_spray', false);
+        }
+      }
+
+      // --- UPDATE BALLS & COLLISIONS ---
+      for (let i = balls.length - 1; i >= 0; i--) {
+        const b = balls[i];
+        b.update(dt);
+
+        // Paddle 1 Collision Check (Primary + Triple Threat Extra Paddles)
+        const p1Paddles = [{ y: player1.y, h: player1.h }];
+        if (activeModifiers.has('triple_threat') && tripleTargetPlayer === 1) {
+          p1Paddles.push({ y: player1.y - player1.h - 18, h: player1.h * 0.85 });
+          p1Paddles.push({ y: player1.y + player1.h + 18, h: player1.h * 0.85 });
+        }
+
+        let hitP1 = false;
+        for (let pad of p1Paddles) {
+          if (
+            b.vx < 0 &&
+            b.x - b.radius <= player1.x + player1.w &&
+            b.x + b.radius >= player1.x &&
+            b.y + b.radius >= pad.y &&
+            b.y - b.radius <= pad.y + pad.h
+          ) {
+            hitP1 = true;
+
+            // Turret bullets get destroyed on paddle contact
+            if (b.isTurretBullet) {
+              audio.playWallHit();
+              createSparks(b.x, b.y, '#f59e0b', 12);
+              balls.splice(i, 1);
+              break;
+            }
+
+            b.x = player1.x + player1.w + b.radius;
+            const hitOffset = (b.y - (pad.y + pad.h / 2)) / (pad.h / 2);
+            const bounceAngle = hitOffset * (Math.PI / 3);
+            const speed = Math.min(BASE_BALL_SPEED * 2.2, Math.hypot(b.vx, b.vy) * 1.05);
+            b.vx = Math.cos(bounceAngle) * speed;
+            b.vy = Math.sin(bounceAngle) * speed;
+            b.color = '#22d3ee';
+            audio.playPaddleHit();
+            createSparks(b.x, b.y, '#22d3ee', 9);
+
+            // 9. Splitter modifier
+            if (activeModifiers.has('splitter') && splitterRemaining > 0) {
+              splitterRemaining--;
+              const childAngle = bounceAngle + (Math.random() > 0.5 ? 0.35 : -0.35);
+              spawnBall(childAngle, 0.9, false, 4.5, '#14b8a6');
+              if (splitterRemaining <= 0) toggleModifier('splitter', false);
+            }
+            break;
+          }
+        }
+
+        // If turret bullet was destroyed on P1, skip remaining checks
+        if (hitP1 && b.isTurretBullet) {
+          continue;
+        }
+
+        // Paddle 2 Collision Check (Primary + Triple Threat Extra Paddles)
+        if (!hitP1) {
+          let hitP2 = false;
+          const p2Paddles = [{ y: player2.y, h: player2.h }];
+          if (activeModifiers.has('triple_threat') && tripleTargetPlayer === 2) {
+            p2Paddles.push({ y: player2.y - player2.h - 18, h: player2.h * 0.85 });
+            p2Paddles.push({ y: player2.y + player2.h + 18, h: player2.h * 0.85 });
+          }
+
+          for (let pad of p2Paddles) {
+            if (
+              b.vx > 0 &&
+              b.x + b.radius >= player2.x &&
+              b.x - b.radius <= player2.x + player2.w &&
+              b.y + b.radius >= pad.y &&
+              b.y - b.radius <= pad.y + pad.h
+            ) {
+              hitP2 = true;
+
+              // Turret bullets get destroyed on paddle contact
+              if (b.isTurretBullet) {
+                audio.playWallHit();
+                createSparks(b.x, b.y, '#f59e0b', 12);
+                balls.splice(i, 1);
+                break;
+              }
+
+              b.x = player2.x - b.radius;
+              const hitOffset = (b.y - (pad.y + pad.h / 2)) / (pad.h / 2);
+              const bounceAngle = Math.PI - hitOffset * (Math.PI / 3);
+              const speed = Math.min(BASE_BALL_SPEED * 2.2, Math.hypot(b.vx, b.vy) * 1.05);
+              b.vx = Math.cos(bounceAngle) * speed;
+              b.vy = Math.sin(bounceAngle) * speed;
+              b.color = '#ec4899';
+              audio.playPaddleHit();
+              createSparks(b.x, b.y, '#ec4899', 9);
+
+              // 9. Splitter modifier
+              if (activeModifiers.has('splitter') && splitterRemaining > 0) {
+                splitterRemaining--;
+                const childAngle = bounceAngle + (Math.random() > 0.5 ? 0.35 : -0.35);
+                spawnBall(childAngle, 0.9, false, 4.5, '#14b8a6');
+                if (splitterRemaining <= 0) toggleModifier('splitter', false);
+              }
+              break;
+            }
+          }
+
+          if (hitP2 && b.isTurretBullet) {
+            continue;
+          }
+        }
+
+        // Score Right (P2 scores)
+        if (b.x + b.radius < 0) {
+          if (isLabSandbox || (scoreP1 < TARGET_SCORE && scoreP2 < TARGET_SCORE)) {
+            scoreP2++;
+            p2ScoreEl.innerText = scoreP2;
+            createSparks(15, b.y, '#ec4899', 14);
+            audio.playScore(false);
+            screenShake = 6;
+            checkChaosTrigger();
+            if (checkMatchWinner()) {
+              balls.splice(i, 1);
+              break;
+            }
+          }
+          balls.splice(i, 1);
+          continue;
+        }
+
+        // Score Left (P1 scores)
+        if (b.x - b.radius > V_WIDTH) {
+          if (isLabSandbox || (scoreP1 < TARGET_SCORE && scoreP2 < TARGET_SCORE)) {
+            scoreP1++;
+            p1ScoreEl.innerText = scoreP1;
+            createSparks(V_WIDTH - 15, b.y, '#22d3ee', 14);
+            audio.playScore(true);
+            screenShake = 6;
+            checkChaosTrigger();
+            if (checkMatchWinner()) {
+              balls.splice(i, 1);
+              break;
+            }
+          }
+          balls.splice(i, 1);
+          continue;
+        }
+      }
+
+      // Update Sparks
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+
+      // Update Center Ring UI
+      const progress = Math.max(0, Math.min(1, spawnTimer / activeInterval));
+      const circumference = 125.6;
+      spawnRingEl.style.strokeDashoffset = circumference * (1 - progress);
+      spawnTimerEl.innerText = Math.max(0, activeInterval - spawnTimer).toFixed(1) + 's';
+      ballCountEl.innerText = balls.length;
+    }
+
+    // --- TRAJECTORY RETICLE DRAWING ---
+    function drawNextBallTrajectory() {
+      const cx = V_WIDTH / 2;
+      const cy = V_HEIGHT / 2;
+
+      const spawnerCenters = [{ x: cx, y: cy, angle: nextBallAngle }];
+      if (activeModifiers.has('dupe')) {
+        spawnerCenters.push({ x: cx, y: cy + 70, angle: nextDupeBallAngle });
+      }
+
+      spawnerCenters.forEach((spawner, sIdx) => {
+        // Center Spawner Ring
+        ctx.beginPath();
+        ctx.arc(spawner.x, spawner.y, 20, 0, Math.PI * 2);
+        ctx.strokeStyle = activeModifiers.has('frenzy') ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Pulsing Core
+        const pulse = 4 + Math.sin(Date.now() / 150 + sIdx) * 2;
+        ctx.beginPath();
+        ctx.arc(spawner.x, spawner.y, pulse, 0, Math.PI * 2);
+        ctx.fillStyle = activeModifiers.has('frenzy') ? '#f59e0b' : (sIdx === 1 ? '#06b6d4' : '#38bdf8');
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Charge Visual Ring
+        if (activeModifiers.has('charge')) {
+          ctx.beginPath();
+          ctx.arc(spawner.x, spawner.y, 12 + chargeCount * 1.5, 0, Math.PI * 2);
+          ctx.strokeStyle = '#818cf8';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Render Trajectory Lines
+        const angles = activeModifiers.has('frenzy') 
+          ? [-2, -1, 0, 1, 2].map(k => spawner.angle + k * (Math.PI / 48))
+          : [spawner.angle];
+
+        angles.forEach((theta, idx) => {
+          const isMain = idx === 0 || angles.length === 1;
+          const arrowDist = isMain ? 55 : 42;
+          const tx = spawner.x + Math.cos(theta) * arrowDist;
+          const ty = spawner.y + Math.sin(theta) * arrowDist;
+
+          // Dotted Laser Guide
+          ctx.beginPath();
+          ctx.setLineDash([4, 4]);
+          ctx.moveTo(spawner.x, spawner.y);
+          ctx.lineTo(tx, ty);
+          ctx.strokeStyle = isMain ? 'rgba(245, 158, 11, 0.8)' : 'rgba(245, 158, 11, 0.4)';
+          ctx.lineWidth = isMain ? 2 : 1;
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Arrow Head
+          const headLen = isMain ? 8 : 6;
+          const headAngle = Math.PI / 6;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(tx - headLen * Math.cos(theta - headAngle), ty - headLen * Math.sin(theta - headAngle));
+          ctx.lineTo(tx - headLen * Math.cos(theta + headAngle), ty - headLen * Math.sin(theta + headAngle));
+          ctx.closePath();
+          ctx.fillStyle = isMain ? '#f59e0b' : 'rgba(245, 158, 11, 0.6)';
+          ctx.fill();
+        });
+      });
+    }
+
+    // --- DRAW TURRETS HELPER ---
+    function drawTurrets() {
+      for (let t of turrets) {
+        ctx.save();
+        const baseColor = t.player === 1 ? '#22d3ee' : '#ec4899';
+        // Base Sentry Pod
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Barrel pointing toward opponent
+        const barrelAngle = t.player === 1 ? 0 : Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(t.x, t.y);
+        ctx.lineTo(t.x + Math.cos(barrelAngle) * 20, t.y + Math.sin(barrelAngle) * 20);
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Core Glowing Light
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = baseColor;
+        ctx.shadowColor = baseColor;
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Life Ring Indicator
+        const lifePct = Math.max(0, t.life / t.maxLife);
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 17, 0, Math.PI * 2 * lifePct);
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // --- DRAW PADDLE HELPER ---
+    function drawPaddle(p, color, isP1) {
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.roundRect(p.x, p.y, p.w, p.h, 4);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // 16. Binary digital glyphs indicator
+      if (activeModifiers.has('binary')) {
+        ctx.save();
+        ctx.fillStyle = '#052e16';
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+
+        // Display 0 or 1 label
+        const bitChar = p.y === 0 ? '0' : '1';
+        ctx.fillStyle = '#86efac';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bitChar, p.x + p.w / 2, p.y + p.h / 2);
+        ctx.restore();
+      }
+
+      // Glue slime drip overlay
+      if (activeModifiers.has('glue')) {
+        ctx.fillStyle = '#84cc16';
+        ctx.fillRect(p.x, p.y + p.h - 4, p.w, 4);
+      }
+
+      // 11. Me, Myself & I: Draw Extra Twin Mini-Paddles
+      if (activeModifiers.has('triple_threat')) {
+        const isTarget = (isP1 && tripleTargetPlayer === 1) || (!isP1 && tripleTargetPlayer === 2);
+        if (isTarget) {
+          const miniH = p.h * 0.85;
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.85;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 10;
+
+          // Upper Mini Paddle
+          ctx.beginPath();
+          ctx.roundRect(p.x, p.y - miniH - 18, p.w, miniH, 3);
+          ctx.fill();
+
+          // Lower Mini Paddle
+          ctx.beginPath();
+          ctx.roundRect(p.x, p.y + p.h + 18, p.w, miniH, 3);
+          ctx.fill();
+
+          ctx.globalAlpha = 1.0;
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+
+    // --- MAIN RENDER PASS ---
+    function render() {
+      ctx.save();
+      if (screenShake > 0) {
+        const shakeX = (Math.random() - 0.5) * screenShake;
+        const shakeY = (Math.random() - 0.5) * screenShake;
+        ctx.translate(shakeX, shakeY);
+      }
+
+      // Background Field
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+
+      // Center Court Net Line
+      ctx.beginPath();
+      ctx.setLineDash([8, 8]);
+      ctx.moveTo(V_WIDTH / 2, 0);
+      ctx.lineTo(V_WIDTH / 2, V_HEIGHT);
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw Center Trajectory Reticle & Aiming Line
+      drawNextBallTrajectory();
+
+      // Draw Turrets
+      if (activeModifiers.has('turret')) {
+        drawTurrets();
+      }
+
+      // Draw Paddles
+      drawPaddle(player1, player1.color, true);
+      drawPaddle(player2, player2.color, false);
+
+      // Draw Balls
+      for (let b of balls) {
+        b.draw();
+      }
+
+      // Draw Sparks
+      for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+
+      ctx.restore();
+    }
+
+    // --- MAIN LOOP ---
+    let lastTime = performance.now();
+    function gameLoop(currentTime) {
+      const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+      lastTime = currentTime;
+
+      update(dt);
+      render();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // --- MATCH INITIALIZATION & CONTROLS ---
+    function resetMatch(clearScores = true) {
+      if (clearScores) {
+        scoreP1 = 0;
+        scoreP2 = 0;
+        p1ScoreEl.innerText = '0';
+        p2ScoreEl.innerText = '0';
+        p1Milestones.clear();
+        p2Milestones.clear();
+        clearAllModifiers();
+      }
+
+      p1TargetLabel.innerText = `/${TARGET_SCORE}`;
+      p2TargetLabel.innerText = `/${TARGET_SCORE}`;
+
+      player1.y = (V_HEIGHT - player1.h) / 2;
+      player2.y = (V_HEIGHT - player2.h) / 2;
+      balls = [];
+      particles = [];
+      spawnTimer = 0;
+      dupeSpawnTimer = 0;
+      calculateNextTrajectory();
+
+      if (clearScores) {
+        spawnBall(); // Initial starting ball
+      }
+    }
+
+    function startMatch(sandbox = false) {
+      audio.init();
+      isLabSandbox = sandbox;
+      resetMatch(true);
+
+      if (sandbox) {
+        modalExitLabBtn.classList.remove('hidden');
+        exitLabBadgeBtn.classList.remove('hidden');
+      } else {
+        modalExitLabBtn.classList.add('hidden');
+        exitLabBadgeBtn.classList.add('hidden');
+      }
+
+      isRunning = true;
+      isPaused = false;
+      overlay.classList.add('hidden');
+      gameOverModal.classList.add('hidden');
+      document.getElementById('pause-btn').innerText = 'Pause (Space)';
+    }
+
+    function exitCurrentRound() {
+      isRunning = false;
+      isPaused = true;
+      isLabSandbox = false;
+      balls = [];
+      particles = [];
+      clearAllModifiers();
+      scoreP1 = 0;
+      scoreP2 = 0;
+      p1ScoreEl.innerText = '0';
+      p2ScoreEl.innerText = '0';
+      modalExitLabBtn.classList.add('hidden');
+      exitLabBadgeBtn.classList.add('hidden');
+      gameOverModal.classList.add('hidden');
+      overlay.classList.remove('hidden');
+    }
+
+    function togglePause() {
+      if (!isRunning) return;
+      isPaused = !isPaused;
+      document.getElementById('pause-btn').innerText = isPaused ? 'Resume (Space)' : 'Pause (Space)';
+    }
+
+    function pauseGameForModal() {
+      if (isRunning && !isPaused) {
+        isPaused = true;
+        document.getElementById('pause-btn').innerText = 'Resume (Space)';
+      }
+    }
+
+    // --- LAB UI SYNC ---
+    function syncLabMatrixUI() {
+      const activeCount = activeModifiers.size;
+      const countEl = document.getElementById('lab-active-count');
+      if (countEl) countEl.innerText = `${activeCount}/${ALL_MODIFIERS.length} Active`;
+
+      document.querySelectorAll('.lab-mod-toggle').forEach(btn => {
+        const mod = btn.getAttribute('data-mod');
+        const statusSpan = btn.querySelector('.mod-status');
+        if (activeModifiers.has(mod)) {
+          btn.className = 'lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-purple-950/80 border-purple-500 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.3)]';
+          if (statusSpan) {
+            statusSpan.innerText = 'ON';
+            statusSpan.className = 'text-[10px] font-bold mod-status text-purple-300';
+          }
+        } else {
+          btn.className = 'lab-mod-toggle p-2 rounded-lg border text-left flex justify-between items-center bg-slate-800/80 border-slate-700 text-slate-300';
+          if (statusSpan) {
+            statusSpan.innerText = 'OFF';
+            statusSpan.className = 'text-[10px] font-bold mod-status text-slate-500';
+          }
+        }
+      });
+    }
+
+    function syncCheatModalUI() {
+      document.querySelectorAll('.cheat-mod-btn').forEach(btn => {
+        const mod = btn.getAttribute('data-mod');
+        if (activeModifiers.has(mod)) {
+          btn.className = 'cheat-mod-btn p-1.5 rounded bg-amber-950/80 text-[10px] font-bold border border-amber-500 text-amber-200 shadow-sm';
+        } else {
+          btn.className = 'cheat-mod-btn p-1.5 rounded bg-slate-800 text-[10px] font-bold border border-slate-700 text-slate-300';
+        }
+      });
+    }
+
+    // --- CANVAS RESIZE & ASPECT FIT ---
+    function resizeCanvas() {
+      const rect = canvasContainer.getBoundingClientRect();
+      canvas.width = V_WIDTH;
+      canvas.height = V_HEIGHT;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // --- MOUSE & TOUCH INPUT LISTENERS ---
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isRunning || isPaused) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleY = V_HEIGHT / rect.height;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+      if (activeModifiers.has('binary')) {
+        player1.y = mouseY < V_HEIGHT / 2 ? 0 : V_HEIGHT / 2;
+      } else {
+        player1.y = Math.max(5, Math.min(V_HEIGHT - player1.h - 5, mouseY - player1.h / 2));
+      }
+    });
+
+    const touchLeft = document.getElementById('touch-left');
+    const touchRight = document.getElementById('touch-right');
+
+    touchLeft.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const scaleY = V_HEIGHT / rect.height;
+      touchYLeft = (e.touches[0].clientY - rect.top) * scaleY;
+    }, { passive: false });
+
+    touchLeft.addEventListener('touchend', () => { touchYLeft = null; });
+
+    touchRight.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const scaleY = V_HEIGHT / rect.height;
+      touchYRight = (e.touches[0].clientY - rect.top) * scaleY;
+    }, { passive: false });
+
+    touchRight.addEventListener('touchend', () => { touchYRight = null; });
+
+    // Keyboard inputs
+    window.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      if (e.code === 'Space') {
+        if (!overlay.classList.contains('hidden')) {
+          startMatch(false);
+        } else if (gameOverModal.classList.contains('hidden')) {
+          togglePause();
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+    });
+
+    // --- BUTTON EVENT LISTENERS ---
+    document.getElementById('start-btn').addEventListener('click', () => startMatch(false));
+    document.getElementById('rematch-btn').addEventListener('click', () => startMatch(false));
+    document.getElementById('pause-btn').addEventListener('click', togglePause);
+    document.getElementById('restart-btn').addEventListener('click', () => resetMatch(true));
+    document.getElementById('arena-exit-btn').addEventListener('click', exitCurrentRound);
+    document.getElementById('exit-round-btn').addEventListener('click', exitCurrentRound);
+
+    // Audio toggle
+    const audioToggleBtn = document.getElementById('audio-toggle');
+    audioToggleBtn.addEventListener('click', () => {
+      audio.init();
+      audio.enabled = !audio.enabled;
+      audioToggleBtn.innerText = audio.enabled ? '🔊 Sound On' : '🔇 Muted';
+      audioToggleBtn.className = audio.enabled 
+        ? 'px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+        : 'px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-rose-950/70 text-rose-300 border border-rose-500/40';
+    });
+
+    // Mode Toggle (1P vs 2P)
+    const modeAiBtn = document.getElementById('mode-ai');
+    const modePvpBtn = document.getElementById('mode-pvp');
+    const p2Label = document.getElementById('p2-label');
+    const p2CtrlText = document.getElementById('p2-ctrl-text');
+
+    modeAiBtn.addEventListener('click', () => {
+      isPvP = false;
+      modeAiBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all border-cyan-400 bg-cyan-950/40 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.3)]';
+      modePvpBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-500';
+      p2Label.innerText = 'CPU (AI)';
+      p2CtrlText.innerHTML = '<b class="text-pink-400">CPU:</b> Autonomous Adaptive Tracking AI';
+    });
+
+    modePvpBtn.addEventListener('click', () => {
+      isPvP = true;
+      modePvpBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all border-pink-500 bg-pink-950/40 text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.3)]';
+      modeAiBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm border-2 transition-all border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-500';
+      p2Label.innerText = 'P2 (PINK)';
+      p2CtrlText.innerHTML = '<b class="text-pink-400">P2:</b> [Up/Down] Arrow Keys or Touch (Right side)';
+    });
+
+    // --- CHAOS COMBO LAB MODAL CONTROLS ---
+    const labModal = document.getElementById('lab-modal');
+    const labBtn = document.getElementById('lab-btn');
+    const overlayLabBtn = document.getElementById('overlay-lab-btn');
+    const closeLabBtn = document.getElementById('close-lab-btn');
+    const labResumeBtn = document.getElementById('lab-resume-btn');
+    const labExitToMatchBtn = document.getElementById('lab-exit-to-match-btn');
+
+    function openLabModal() {
+      pauseGameForModal();
+      // Ensure the active session instantly adopts Lab Sandbox rules
+      isLabSandbox = true;
+      modalExitLabBtn.classList.remove('hidden');
+      exitLabBadgeBtn.classList.remove('hidden');
+      syncLabMatrixUI();
+      labModal.classList.remove('hidden');
+    }
+
+    labBtn.addEventListener('click', openLabModal);
+    overlayLabBtn.addEventListener('click', () => {
+      startMatch(true);
+      openLabModal();
+    });
+
+    closeLabBtn.addEventListener('click', () => {
+      labModal.classList.add('hidden');
+      if (isRunning) {
+        lastTime = performance.now();
+        isPaused = false;
+        document.getElementById('pause-btn').innerText = 'Pause (Space)';
+      }
+    });
+
+    labResumeBtn.addEventListener('click', () => {
+      labModal.classList.add('hidden');
+      isLabSandbox = true;
+      modalExitLabBtn.classList.remove('hidden');
+      exitLabBadgeBtn.classList.remove('hidden');
+      if (!isRunning) {
+        startMatch(true);
+      } else {
+        lastTime = performance.now();
+        isPaused = false;
+        document.getElementById('pause-btn').innerText = 'Pause (Space)';
+      }
+    });
+
+    function exitLabMode() {
+      isLabSandbox = false;
+      labModal.classList.add('hidden');
+      modalExitLabBtn.classList.add('hidden');
+      exitLabBadgeBtn.classList.add('hidden');
+      if (isRunning) {
+        lastTime = performance.now();
+        isPaused = false;
+        document.getElementById('pause-btn').innerText = 'Pause (Space)';
+      } else {
+        startMatch(false);
+      }
+    }
+
+    labExitToMatchBtn.addEventListener('click', exitLabMode);
+    modalExitLabBtn.addEventListener('click', exitLabMode);
+    exitLabBadgeBtn.addEventListener('click', exitLabMode);
+
+    // Matrix Toggles
+    document.querySelectorAll('.lab-mod-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pauseGameForModal();
+        const mod = btn.getAttribute('data-mod');
+        toggleModifier(mod);
+      });
+    });
+
+    document.getElementById('lab-clear-btn').addEventListener('click', () => {
+      pauseGameForModal();
+      clearAllModifiers();
+    });
+
+    document.getElementById('lab-burst-btn').addEventListener('click', () => {
+      for (let i = 0; i < 10; i++) {
+        const angle = (Math.random() - 0.5) * Math.PI;
+        spawnBall(angle, 1.15, false, 6, '#f59e0b');
+      }
+    });
+
+    document.getElementById('lab-wipe-balls-btn').addEventListener('click', () => {
+      balls = [];
+      spawnBall();
+    });
+
+    // Preset Combo Buttons
+    document.getElementById('preset-bullet-hell').addEventListener('click', () => {
+      pauseGameForModal();
+      clearAllModifiers();
+      toggleModifier('frenzy', true);
+      toggleModifier('turbo', true);
+    });
+
+    document.getElementById('preset-quantum').addEventListener('click', () => {
+      pauseGameForModal();
+      clearAllModifiers();
+      toggleModifier('sinusoidal', true);
+      toggleModifier('micro', true);
+      toggleModifier('splitter', true);
+    });
+
+    document.getElementById('preset-lockon').addEventListener('click', () => {
+      pauseGameForModal();
+      clearAllModifiers();
+      toggleModifier('homing', true);
+      toggleModifier('glue', true);
+      toggleModifier('evil_spray', true);
+    });
+
+    document.getElementById('preset-all').addEventListener('click', () => {
+      pauseGameForModal();
+      ALL_MODIFIERS.forEach(m => toggleModifier(m, true));
+    });
+
+    // --- CHEAT / DEVELOPER CONSOLE CONTROLS ---
+    const openCheatBtn = document.getElementById('open-cheat-btn');
+    const cheatPassModal = document.getElementById('cheat-pass-modal');
+    const cheatConsoleModal = document.getElementById('cheat-console-modal');
+    const cheatCodeInput = document.getElementById('cheat-code-input');
+    const submitCheatCodeBtn = document.getElementById('submit-cheat-code-btn');
+    const cancelCheatCodeBtn = document.getElementById('cancel-cheat-code-btn');
+    const cheatErrorMsg = document.getElementById('cheat-error-msg');
+    const closeCheatConsoleBtn = document.getElementById('close-cheat-console-btn');
+    const cheatResumeBtn = document.getElementById('cheat-resume-btn');
+
+    openCheatBtn.addEventListener('click', () => {
+      pauseGameForModal();
+      cheatCodeInput.value = '';
+      cheatErrorMsg.classList.add('hidden');
+      cheatPassModal.classList.remove('hidden');
+      cheatCodeInput.focus();
+    });
+
+    cancelCheatCodeBtn.addEventListener('click', () => {
+      cheatPassModal.classList.add('hidden');
+    });
+
+    function verifyCheatCode() {
+      if (cheatCodeInput.value.trim() === 'code123456') {
+        cheatPassModal.classList.add('hidden');
+        syncCheatModalUI();
+        cheatConsoleModal.classList.remove('hidden');
+      } else {
+        cheatErrorMsg.classList.remove('hidden');
+      }
+    }
+
+    submitCheatCodeBtn.addEventListener('click', verifyCheatCode);
+    cheatCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') verifyCheatCode();
+    });
+
+    closeCheatConsoleBtn.addEventListener('click', () => {
+      cheatConsoleModal.classList.add('hidden');
+    });
+
+    cheatResumeBtn.addEventListener('click', () => {
+      cheatConsoleModal.classList.add('hidden');
+      if (isRunning) {
+        lastTime = performance.now();
+        isPaused = false;
+        document.getElementById('pause-btn').innerText = 'Pause (Space)';
+      }
+    });
+
+    closeCheatConsoleBtn.addEventListener('click', () => {
+      cheatConsoleModal.classList.add('hidden');
+      if (isRunning) {
+        lastTime = performance.now();
+        isPaused = false;
+        document.getElementById('pause-btn').innerText = 'Pause (Space)';
+      }
+    });
+
+    // Cheat Sliders
+    const sliderPspeed = document.getElementById('slider-pspeed');
+    const sliderPsize = document.getElementById('slider-psize');
+    const sliderBspeed = document.getElementById('slider-bspeed');
+    const sliderSpawn = document.getElementById('slider-spawn');
+    const sliderTarget = document.getElementById('slider-target');
+
+    sliderPspeed.addEventListener('input', (e) => {
+      PADDLE_SPEED = parseInt(e.target.value);
+      document.getElementById('cheat-pspeed-val').innerText = `${PADDLE_SPEED} px/s`;
+    });
+
+    sliderPsize.addEventListener('input', (e) => {
+      DEFAULT_PADDLE_HEIGHT = parseInt(e.target.value);
+      if (!activeModifiers.has('binary')) {
+        player1.h = activeModifiers.has('micro') ? DEFAULT_PADDLE_HEIGHT * 0.5 : DEFAULT_PADDLE_HEIGHT;
+        player2.h = activeModifiers.has('micro') ? DEFAULT_PADDLE_HEIGHT * 0.5 : DEFAULT_PADDLE_HEIGHT;
+      }
+      document.getElementById('cheat-psize-val').innerText = `${DEFAULT_PADDLE_HEIGHT} px`;
+    });
+
+    sliderBspeed.addEventListener('input', (e) => {
+      BASE_BALL_SPEED = parseInt(e.target.value);
+      document.getElementById('cheat-bspeed-val').innerText = `${BASE_BALL_SPEED} px/s`;
+    });
+
+    sliderSpawn.addEventListener('input', (e) => {
+      BASE_SPAWN_INTERVAL = parseFloat(e.target.value);
+      document.getElementById('cheat-spawn-val').innerText = `${BASE_SPAWN_INTERVAL.toFixed(1)} s`;
+    });
+
+    sliderTarget.addEventListener('input', (e) => {
+      TARGET_SCORE = parseInt(e.target.value);
+      document.getElementById('cheat-target-val').innerText = `${TARGET_SCORE} pts`;
+      p1TargetLabel.innerText = `/${TARGET_SCORE}`;
+      p2TargetLabel.innerText = `/${TARGET_SCORE}`;
+    });
+
+    // Cheat Modifier Toggles
+    document.querySelectorAll('.cheat-mod-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pauseGameForModal();
+        const mod = btn.getAttribute('data-mod');
+        toggleModifier(mod);
+      });
+    });
+
+    document.getElementById('cheat-clear-mods-btn').addEventListener('click', () => {
+      pauseGameForModal();
+      clearAllModifiers();
+    });
+
+    // --- BOOTSTRAP ---
+    window.onload = function () {
+      resizeCanvas();
+      calculateNextTrajectory();
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
